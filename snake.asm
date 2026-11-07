@@ -11,6 +11,8 @@ SNAKE_INITIAL_LENGTH    equ 5
 SNAKE_INITIAL_X         equ 20
 SNAKE_INITIAL_Y         equ 10
 
+FRUIT_CHAR              equ '$'
+
 CLOCK_ADDRESS           equ 0x46C
 
 start:
@@ -94,23 +96,13 @@ snake_init:
     dec cx
     jnz .snake_draw
 
+    call spawn_fruit
 game_loop:
 
     mov al, [CLOCK_ADDRESS]
 .tick:
     cmp al, [CLOCK_ADDRESS]
     je .tick
-
-    sub bp, 2
-    mov dx, [bp]
-    xor bx, bx
-    mov ah, 2
-    int 0x10
-
-    mov bl, 0x0F
-    mov al, BLANK_CHAR
-    mov ah, 0x0E
-    int 0x10
 
     mov ah, 1
     int 0x16
@@ -176,18 +168,31 @@ game_loop:
     cmp dl, BORDER_WIDTH - 1
     je .stop
     push dx
+    xor bx, bx
     mov ah, 2
     int 0x10
 
-    xor bx, bx
     mov bl, 0x0F
     mov al, SNAKE_CHAR
     mov ah, 0x0E
     int 0x10
 
-    
+    cmp dx, [fruit_pos]
+    jne .no_fruit
+    call spawn_fruit
+    jmp game_loop
 
+.no_fruit:
+    sub bp, 2
+    mov dx, [bp]
+    xor bx, bx
+    mov ah, 2
+    int 0x10
 
+    mov bl, 0x0F
+    mov al, BLANK_CHAR
+    mov ah, 0x0E
+    int 0x10
     jmp game_loop
 
 .stop:
@@ -199,6 +204,45 @@ game_loop:
 .left_arrow          dw 0x4B00
 .right_arrow         dw 0x4D00
 .default_direction   dw .right
+
+spawn_fruit:
+    call lfsr_next
+    xor dx, dx
+    mov bx, BORDER_WIDTH - 2
+    div bx
+    mov cl, dl
+    inc cl
+
+    call lfsr_next
+    xor dx, dx
+    mov bx, BORDER_HEIGHT - 2
+    div bx
+    mov dh, dl
+    inc dh
+    mov dl, cl
+
+    mov [fruit_pos], dx
+    xor bx, bx
+    mov ah, 2
+    int 0x10
+    mov bl, 0x0F
+    mov al, FRUIT_CHAR
+    mov ah, 0x0E
+    int 0x10
+    ret
+
+lfsr_next:
+    mov ax, [.lfsr_state]
+    shr ax, 1
+    jnc .store
+    xor ax, 0xB400
+.store:
+    mov [.lfsr_state], ax
+    ret
+
+.lfsr_state dw 0xACE1
+
+fruit_pos dw 0
 
 signature:
     times 510 - ($ - $$) db 0
